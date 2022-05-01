@@ -75,9 +75,9 @@ app.post("/messages", async (req, res) => {
 
     const messagesBody = req.body;
     const messagesBodySchema = joi.object({
-        to: joi.string(),
-        type: joi.string().allow('message', 'private_message'),
-        text: joi.string()
+        to: joi.string().required(),
+        type: joi.valid('message', 'private_message').required(),
+        text: joi.string().required()
     })
 
     const validationMessagesBody = messagesBodySchema.validate(messagesBody, { abortEarly: false });
@@ -89,7 +89,7 @@ app.post("/messages", async (req, res) => {
     // console.log(validationMessagesBody)
 
     const infosHeader = req.headers;
-    const messageHeader = { from: infosHeader.user };
+    const messageHeader = { "from" : infosHeader.user };
 
     const messageHeaderSchema = joi.object({
         from: joi.string()
@@ -104,14 +104,73 @@ app.post("/messages", async (req, res) => {
     //  console.log(validationMessageHeader);
 
     try{
-
-    }catch{
-        
+        const findUser = await dataBase.collection("users").findOne({ name: messageHeader.from });
+        if(findUser === null){
+            res.send("Não foi possível localizá-lo no servidor")
+            return;
+        }
+        const postMessage = await dataBase.collection("messages").insertOne({...messageHeader, ...messagesBody, time: dayjs().format("HH:mm:ss")})
+    }catch (e){
+        res.send("Não foi possível obter a lista de usuários: " + e)
     }
 
     console.log(messageHeader)
-    res.send("A mensagem foi enviada com sucesso para o servidor")
+    res.status(201).send("A mensagem foi enviada com sucesso para o servidor")
 
+})
+
+
+app.get("/messages", async (req, res) =>{
+    let limit = JSON.stringify(req.query);
+    let numberLimit = null;
+
+    if(limit.length === 2){
+        limit = {"limit":''}
+    } else{
+        limit = {...req.query}
+    }
+
+    const limitObjectSchema = joi.object({
+        limit: joi.optional()
+    })
+    
+    let validationLimit = limitObjectSchema.validate(limit, { abortEarly: false });
+
+     // valor 'defoult' para imprimir as mensagens caso o fron passe apenas a palavra 'limit'
+    if(JSON.stringify(validationLimit.value.limit.length) > 0){
+        numberLimit = parseInt(validationLimit.value.limit);
+    }
+    console.log("numberLimit:", numberLimit)
+
+    const user = req.headers.user
+
+
+    try{
+        const allPublicMessages = await dataBase.collection("messages").find({"to": 'Todos'}).toArray()
+        const privateSended = await dataBase.collection("messages").find({"from": user, "type" : "private_message"}).toArray()
+        const privateReceived = await dataBase.collection("messages").find({"to": user, "type" : "private_message"}).toArray()
+
+        let allMessages = [...allPublicMessages, ...privateSended, ...privateReceived];
+        //Aqui será necessária uma função para ordenar esse array e colocar as mensagens mais recentes por primeiro.
+
+        if(numberLimit === null){
+            res.send(allMessages);
+            return;
+        } else{
+            res.send(allMessages.slice(0, numberLimit))
+            return;
+        }
+
+    }catch (e) {
+        res.send("Não foi possível obter a lista de usuários: " + e)
+    }
+
+    
+
+
+    res.send("teste")
+
+    console.log("numer of list: " + numberLimit,  "user: " + user)
 })
 
 app.listen(5001);
