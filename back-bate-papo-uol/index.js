@@ -48,7 +48,7 @@ app.post("/participants", async (req, res) => {
                 { from: login.name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format('HH:mm:ss') }
             )
             console.log("Novo usuário adicionado ao banco de datos");
-        } else{
+        } else {
             console.log("Um usuário tentou entrar no chat com um nome já existente.")
         }
     } catch (e) {
@@ -61,14 +61,57 @@ app.post("/participants", async (req, res) => {
 })
 
 
-app.get("/participants", async (req, res) =>{
+app.get("/participants", async (req, res) => {
     try {
         const list = await dataBase.collection("users").find({}).toArray();
         res.send(list);
-    } catch(e){
+    } catch (e) {
         res.send("Não foi possível obter a lista de usuários: " + e)
     }
 })
 
 
-app.listen(5000);
+app.post("/messages", async (req, res) => {
+
+    const messagesBody = req.body;
+    const messagesBodySchema = joi.object({
+        to: joi.string(),
+        type: joi.string().allow('message', 'private_message'),
+        text: joi.string()
+    })
+
+    const validationMessagesBody = messagesBodySchema.validate(messagesBody, { abortEarly: false });
+    if (validationMessagesBody.error) {
+        console.log(validationMessagesBody.error);
+        res.status(422).send(validationMessagesBody.error.details.message)
+        return;
+    }
+    // console.log(validationMessagesBody)
+
+    const infosHeader = req.headers;
+    const messageHeader = { from: infosHeader.user };
+
+    const messageHeaderSchema = joi.object({
+        from: joi.string()
+    })
+
+    const validationMessageHeader = messageHeaderSchema.validate(messageHeader, { abortEarly: false });
+    if (validationMessageHeader.error) {
+        console.log(validationMessageHeader.error);
+        res.status(422).send(validationMessageHeader.error.details.message)
+        return;
+    }
+    //  console.log(validationMessageHeader);
+
+    try{
+
+    }catch{
+        
+    }
+
+    console.log(messageHeader)
+    res.send("A mensagem foi enviada com sucesso para o servidor")
+
+})
+
+app.listen(5001);
