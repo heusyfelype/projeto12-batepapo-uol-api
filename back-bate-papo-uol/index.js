@@ -6,8 +6,6 @@ import cors from "cors";
 import joi from 'joi';
 import dayjs from 'dayjs';
 
-
-
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -121,43 +119,53 @@ app.post("/messages", async (req, res) => {
 
 
 app.get("/messages", async (req, res) => {
-    let limit = JSON.stringify(req.query);
+    let {
+        limit = ''
+    } = req.query;
     let numberLimit = null;
-
-    if (limit.length === 2) {
-        limit = { "limit": '' }
-    } else {
-        limit = { ...req.query }
-    }
+    console.log({limit})
 
     const limitObjectSchema = joi.object({
         limit: joi.optional()
     })
 
-    let validationLimit = limitObjectSchema.validate(limit, { abortEarly: false });
+    let validationLimit = limitObjectSchema.validate({limit}, { abortEarly: false });
 
     // valor 'defoult' para imprimir as mensagens caso o fron passe apenas a palavra 'limit'
     if (JSON.stringify(validationLimit.value.limit.length) > 0) {
         numberLimit = parseInt(validationLimit.value.limit);
     }
-    console.log("numberLimit:", numberLimit)
 
-    const user = req.headers.user
-
+    const user = req.headers.user;
 
     try {
-        const allPublicMessages = await dataBase.collection("messages").find({ "to": 'Todos' }).toArray()
-        const privateSended = await dataBase.collection("messages").find({ "from": user, "type": "private_message" }).toArray()
-        const privateReceived = await dataBase.collection("messages").find({ "to": user, "type": "private_message" }).toArray()
+        
+        if (typeof numberLimit !== "number") {
+            const allMessages = await dataBase.collection("messages").find(
+                {$or:[
+                    { "to": 'Todos' },
+                    { "from": user, "type": "private_message" },
+                    { "from": user, "type": "private_message" }
+                ]}
+            ).sort(
+                {time: 1}
+            ).toArray()
 
-        let allMessages = [...allPublicMessages, ...privateSended, ...privateReceived];
-        //Aqui será necessária uma função para ordenar esse array e colocar as mensagens mais recentes por primeiro.
-
-        if (numberLimit === null) {
             res.send(allMessages);
             return;
         } else {
-            res.send(allMessages.slice(0, numberLimit))
+
+            const allMessages = await dataBase.collection("messages").find(
+                {$or:[
+                    { "to": 'Todos' },
+                    { "from": user, "type": "private_message" },
+                    { "from": user, "type": "private_message" }
+                ]}
+            ).limit(numberLimit).sort(
+                {time: 1}
+            ).toArray()
+
+            res.send(allMessages)
             return;
         }
 
@@ -165,23 +173,19 @@ app.get("/messages", async (req, res) => {
         res.send("Não foi possível obter a lista de usuários: " + e)
     }
 
-
-
-
     res.send("teste")
-
     console.log("numer of list: " + numberLimit, "user: " + user)
 })
 
 
-setInterval( async () => {
+setInterval(async () => {
     const onlineusers = await dataBase.collection("users").find({}).toArray();
     console.log("lista de users: ", onlineusers)
-    for(let i = 0; i< onlineusers.length; i++){
-        if(parseInt(Date.now()) - parseInt(onlineusers[i].lastStatus) > 300000){
+    for (let i = 0; i < onlineusers.length; i++) {
+        if (parseInt(Date.now()) - parseInt(onlineusers[i].lastStatus) > 300000) {
             const userToDelete = await dataBase.collection("users").deleteOne({ ...onlineusers[i] })
             const logOffMessage = await dataBase.collection("messages").insertOne({
-                from: onlineusers[i].name , to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs().format('HH:mm:ss')
+                from: onlineusers[i].name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs().format('HH:mm:ss')
             })
         }
     }
@@ -200,13 +204,10 @@ app.post("/status", async (req, res) => {
             "name": user
         }, { $set: { "lastStatus": Date.now() } })
 
-        //Aqui será vai o setTimeout?
 
     } catch (e) {
-
+        res.send("Não foi possível atualizar o status: " + e)
     }
-
-
 
 })
 
