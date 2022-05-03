@@ -141,8 +141,8 @@ app.get("/messages", async (req, res) => {
                     $or: [
                         { 'type': 'status' },
                         { 'type': 'message' },
-                        { "to": user, "type": "private_message" },
-                        { "from": user, "type": "private_message" }
+                        { "to": user },
+                        { "from": user}
                     ]
                 }
             ).sort(
@@ -161,8 +161,8 @@ app.get("/messages", async (req, res) => {
                 $or: [
                     { 'type': 'status' },
                     { 'type': 'message' },
-                    { "to": user, "type": "private_message" },
-                    { "from": user, "type": "private_message" }
+                    { "to": user },
+                    { "from": user }
                 ]
             }
         ).limit(numberLimit).sort(
