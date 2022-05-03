@@ -5,13 +5,18 @@ import { MongoClient, ObjectId } from "mongodb";
 import cors from "cors";
 import joi from 'joi';
 import dayjs from 'dayjs';
+import dotenv from 'dotenv';
+
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 let dataBase;
-const mongoClient = new MongoClient("mongodb://localhost:27017");
+
+dotenv.config()
+const mongoClient = new MongoClient(process.env.MONGO_URI);
+
 const promise = mongoClient.connect();
 promise.then(() => {
     dataBase = mongoClient.db("batePapoUol");
