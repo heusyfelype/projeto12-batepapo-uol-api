@@ -139,9 +139,10 @@ app.get("/messages", async (req, res) => {
             const allMessages = await dataBase.collection("messages").find(
                 {
                     $or: [
-                        { "to": 'Todos' },
-                        { "from": user },
+                        { 'type': 'status' },
+                        { 'type': 'message' },
                         { "to": user, "type": "private_message" },
+                        { "from": user, "type": "private_message" }
                     ]
                 }
             ).sort(
@@ -158,9 +159,10 @@ app.get("/messages", async (req, res) => {
         const allMessages = await dataBase.collection("messages").find(
             {
                 $or: [
-                    { "to": 'Todos' },
-                    { "from": user },
-                    { "to": user, "type": "private_message" }
+                    { 'type': 'status' },
+                    { 'type': 'message' },
+                    { "to": user, "type": "private_message" },
+                    { "from": user, "type": "private_message" }
                 ]
             }
         ).limit(numberLimit).sort(
