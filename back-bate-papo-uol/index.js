@@ -32,7 +32,7 @@ app.post("/participants", async (req, res) => {
 
     if (validationLogin.error) {
         console.log(validationLogin.error);
-        res.status(422).send(validationLogin.error.details.message)
+        res.sendStatus(422).send(validationLogin.error.details.message)
         return;
     }
 
@@ -40,22 +40,23 @@ app.post("/participants", async (req, res) => {
         const find = await dataBase.collection("users").findOne({ name: login.name });
         console.log("find: " + JSON.stringify(find));
 
-        if (find === null) {
+        if (!find) {
             let insertName = await dataBase.collection("users").insertOne({ name: login.name, lastStatus: Date.now() });
             let insertSignInMessage = await dataBase.collection("messages").insertOne(
-                { from: login.name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format('HH:mm:ss') }
+                { from: login.name, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format('YYYY-MM-DDTHH:mm:ssZ') }
             )
             console.log("Novo usuário adicionado ao banco de datos");
+            res.sendStatus(200);
+            return;
         } else {
             console.log("Um usuário tentou entrar no chat com um nome já existente.")
+            res.sendStatus(409)
+            return;
         }
     } catch (e) {
-        res.send("Ops, não conseguimos conectar ao servidor: " + e)
+        res.sendStatus(422).send("Ops, não conseguimos conectar ao servidor: " + e)
         return;
     }
-
-
-    res.send("Deu certo! ValidationLogin: " + JSON.stringify(validationLogin))
 })
 
 
@@ -81,22 +82,22 @@ app.post("/messages", async (req, res) => {
     const validationMessagesBody = messagesBodySchema.validate(messagesBody, { abortEarly: false });
     if (validationMessagesBody.error) {
         console.log(validationMessagesBody.error);
-        res.status(422).send(validationMessagesBody.error.details.message)
+        res.sendStatus(422).send(validationMessagesBody.error.details.message)
         return;
     }
-    // console.log(validationMessagesBody)
+    console.log(validationMessagesBody)
 
     const infosHeader = req.headers;
     const messageHeader = { "from": infosHeader.user };
 
     const messageHeaderSchema = joi.object({
-        from: joi.string()
+        "from": joi.string()
     })
 
     const validationMessageHeader = messageHeaderSchema.validate(messageHeader, { abortEarly: false });
     if (validationMessageHeader.error) {
         console.log(validationMessageHeader.error);
-        res.status(422).send(validationMessageHeader.error.details.message)
+        res.sendStatus(422).send(validationMessageHeader.error.details.message)
         return;
     }
     //  console.log(validationMessageHeader);
@@ -107,14 +108,14 @@ app.post("/messages", async (req, res) => {
             res.send("Não foi possível localizá-lo no servidor")
             return;
         }
-        const postMessage = await dataBase.collection("messages").insertOne({ ...messageHeader, ...messagesBody, time: dayjs().format("HH:mm:ss") })
+        const postMessage = await dataBase.collection("messages").insertOne({ ...messageHeader, ...messagesBody, time: dayjs().format('YYYY-MM-DDTHH:mm:ssZ') })
+        res.sendStatus(201);
+        console.log("mesnagem enviada: " + messagesBody.text, "postMessage: ", postMessage)
+        return;
     } catch (e) {
-        res.send("Não foi possível obter a lista de usuários: " + e)
+        res.sendStatus().send("Não foi possível obter a lista de usuários: " + e);
+        return;
     }
-
-    console.log(messageHeader)
-    res.status(201).send("A mensagem foi enviada com sucesso para o servidor")
-
 })
 
 
@@ -123,13 +124,18 @@ app.get("/messages", async (req, res) => {
         limit = ''
     } = req.query;
     let numberLimit = null;
-    console.log({limit})
+    // console.log({limit})
 
     const limitObjectSchema = joi.object({
         limit: joi.optional()
     })
 
-    let validationLimit = limitObjectSchema.validate({limit}, { abortEarly: false });
+    let validationLimit = limitObjectSchema.validate({ limit }, { abortEarly: false });
+    if (validationLimit.error) {
+        console.log("problema na no limit: ");
+        res.sendStatus(422);
+        return;
+    }
 
     // valor 'defoult' para imprimir as mensagens caso o fron passe apenas a palavra 'limit'
     if (JSON.stringify(validationLimit.value.limit.length) > 0) {
@@ -138,36 +144,48 @@ app.get("/messages", async (req, res) => {
 
     const user = req.headers.user;
 
+    console.log("limit: ", limit, "user: ", user)
     try {
-        
+
         if (typeof numberLimit !== "number") {
+            console.log("tem numero na request")
             const allMessages = await dataBase.collection("messages").find(
-                {$or:[
-                    { "to": 'Todos' },
-                    { "from": user, "type": "private_message" },
-                    { "from": user, "type": "private_message" }
-                ]}
+                {
+                    $or: [
+                        { "to": 'Todos' },
+                        { "from": user },
+                        { "to": user, "type": "private_message" },
+                    ]
+                }
             ).sort(
-                {time: 1}
+                { "time": 1 }
             ).toArray()
+
+            for (let eachMessage of allMessages) {
+                eachMessage.time = dayjs(eachMessage.time).format('HH:mm:ss');
+            }
 
             res.send(allMessages);
             return;
-        } else {
-
-            const allMessages = await dataBase.collection("messages").find(
-                {$or:[
-                    { "to": 'Todos' },
-                    { "from": user, "type": "private_message" },
-                    { "from": user, "type": "private_message" }
-                ]}
-            ).limit(numberLimit).sort(
-                {time: 1}
-            ).toArray()
-
-            res.send(allMessages)
-            return;
         }
+        const allMessages = await dataBase.collection("messages").find(
+            {
+                $or: [
+                    { "to": 'Todos' },
+                    { "from": user },
+                    { "to": user, "type": "private_message" }
+                ]
+            }
+        ).limit(numberLimit).sort(
+            { "time": 1 }
+        ).toArray()
+
+        for (let eachMessage of allMessages) {
+            eachMessage.time = dayjs(eachMessage.time).format('HH:mm:ss');
+        }
+        console.log(allMessages)
+        res.send(allMessages)
+        return;
 
     } catch (e) {
         res.send("Não foi possível obter a lista de usuários: " + e)
@@ -180,12 +198,12 @@ app.get("/messages", async (req, res) => {
 
 setInterval(async () => {
     const onlineusers = await dataBase.collection("users").find({}).toArray();
-    console.log("lista de users: ", onlineusers)
+    //console.log("lista de users: ", onlineusers)
     for (let i = 0; i < onlineusers.length; i++) {
         if (parseInt(Date.now()) - parseInt(onlineusers[i].lastStatus) > 300000) {
             const userToDelete = await dataBase.collection("users").deleteOne({ ...onlineusers[i] })
             const logOffMessage = await dataBase.collection("messages").insertOne({
-                from: onlineusers[i].name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs().format('HH:mm:ss')
+                from: onlineusers[i].name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs().format('YYYY-MM-DDTHH:mm:ssZ')
             })
         }
     }
@@ -193,20 +211,27 @@ setInterval(async () => {
 
 app.post("/status", async (req, res) => {
     const user = req.headers.user;
+    //console.log(user)
     try {
         const statusUser = await dataBase.collection("users").findOne({ "name": user })
         if (!statusUser) {
             res.sendStatus(404)
             return;
         }
+        //console.log(statusUser)
 
-        await dataBase.collection("users").updateOne({
+        const updatedUser = await dataBase.collection("users").updateOne({
             "name": user
-        }, { $set: { "lastStatus": Date.now() } })
-
+        }, {
+            $set: { "lastStatus": Date.now() }
+        })
+        //console.log(updatedUser)
+        res.sendStatus(200);
+        return;
 
     } catch (e) {
-        res.send("Não foi possível atualizar o status: " + e)
+        res.sendStatus(404).send("Não foi possível atualizar o status: " + e);
+        return;
     }
 
 })
